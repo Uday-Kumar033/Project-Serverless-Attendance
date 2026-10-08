@@ -11,30 +11,6 @@ resource "aws_dynamodb_table" "users" {
     name = "userId"
     type = "S"
   }
-  attribute {
-    name = "email"
-    type = "S"
-  }
-  attribute {
-    name = "username"
-    type = "S"
-  }
-
-  global_secondary_index {
-    name            = "email-index"
-    hash_key        = "email"
-    projection_type = "ALL"
-    read_capacity   = 2
-    write_capacity  = 2
-  }
-
-  global_secondary_index {
-    name            = "username-index"
-    hash_key        = "username"
-    projection_type = "ALL"
-    read_capacity   = 2
-    write_capacity  = 2
-  }
 
   point_in_time_recovery {
     enabled = true
@@ -86,6 +62,18 @@ resource "aws_dynamodb_table" "classes" {
   attribute {
     name = "classId"
     type = "S"
+  }
+  attribute {
+    name = "teacherId"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "teacher-index"
+    hash_key        = "teacherId"
+    projection_type = "ALL"
+    read_capacity   = 2
+    write_capacity  = 2
   }
 }
 

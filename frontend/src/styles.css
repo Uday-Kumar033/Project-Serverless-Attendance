@@ -28,3 +28,23 @@ button.ghost { background: transparent; color: var(--ink); border: 1px solid var
 a { color: var(--accent); }
 .shell { max-width: 900px; margin: 0 auto; padding: 1.5rem 1rem; }
 .shell header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+select { padding: .65rem .75rem; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; }
+input[aria-invalid="true"] { border-color: var(--absent); }
+.notice { background: #e6f4ee; color: var(--present); border-radius: 6px; padding: .6rem .75rem; margin: 0 0 1rem; font-size: .9rem; }
+h2 { font-size: 1.15rem; margin: 0 0 .75rem; }
+section { border-top: 1px solid var(--line); padding: 1.25rem 0; display: grid; gap: .9rem; }
+table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); }
+th, td { text-align: left; padding: .6rem .75rem; border-bottom: 1px solid var(--line); font-size: .95rem; }
+th { background: #e9eef2; font-weight: 700; }
+.good { color: var(--present); font-weight: 500; }
+.bad { color: var(--absent); font-weight: 500; }
+.meter { width: 120px; height: 8px; background: var(--line); border-radius: 4px; display: inline-block; margin-right: .6rem; vertical-align: middle; overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--present); }
+.meter span.low { background: var(--absent); }
+form.inline { display: flex; gap: .75rem; align-items: end; flex-wrap: wrap; }
+form.inline label { flex: 1 1 200px; }
+.toolbar { display: flex; gap: 1rem; align-items: center; }
+label.choice { display: inline-flex; padding: .25rem; }
+input[type='radio'] { width: 1.25rem; height: 1.25rem; padding: 0; accent-color: var(--accent); }
+label.date { max-width: 220px; }
+@media (max-width: 600px) { th, td { padding: .5rem; font-size: .85rem; } .meter { width: 70px; } }

@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import AuthLayout from '../components/AuthLayout.jsx'
 
 export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const notice = useLocation().state?.notice
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -27,6 +28,7 @@ export default function Login() {
 
   return (
     <AuthLayout title="Sign in" subtitle="Use your email or username.">
+      {notice && <p className="notice" role="status">{notice}</p>}
       <form onSubmit={onSubmit}>
         <label>Email or username
           <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" required />

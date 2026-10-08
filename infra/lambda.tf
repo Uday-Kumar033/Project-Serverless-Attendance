@@ -3,6 +3,13 @@ resource "random_password" "jwt_secret" {
   special = false
 }
 
+resource "random_password" "teacher_code" {
+  length  = 8
+  special = false
+  upper   = true
+  lower   = false
+}
+
 data "archive_file" "backend" {
   type        = "zip"
   source_dir  = "${path.module}/../build/package"
@@ -121,7 +128,9 @@ resource "aws_lambda_function" "fn" {
       CLASSES_TABLE    = aws_dynamodb_table.classes.name
       OTP_TABLE        = aws_dynamodb_table.otp.name
       JWT_SECRET       = random_password.jwt_secret.result
-      ALLOWED_ORIGIN   = var.allowed_origin
+      TEACHER_SIGNUP_CODE = random_password.teacher_code.result
+      OTP_DELIVERY     = var.otp_delivery
+      STAGE            = var.stage
     }
   }
 

@@ -1,21 +1,203 @@
 # Serverless Attendance Management System
 
-React (Vite) + Python Lambda + DynamoDB, provisioned with Terraform.
+A web app where **teachers mark attendance** and **students view their own**. There are no servers to manage: everything runs on AWS serverless services (Lambda, DynamoDB, API Gateway, S3, CloudFront).
+
+## What it does
+
+| Role | Can do |
+|------|--------|
+| Student | Register, sign in, see **only their own** attendance (per class percentage, flagged below 75%, and day by day) |
+| Teacher | Register (needs a sign-up code), create classes, add students by username, mark present/absent for any date, correct earlier marks, view a class on any day |
+| Everyone | Sign in with **email or username** + password. Forgot password? Reset it with a **6-digit code sent to the registered mobile number** |
+
+## How it works
+
+```
+                        +--> S3 bucket (React app files)
+Browser --> CloudFront -+
+   |
+   +--> API Gateway --> Lambda (Python) --> DynamoDB (4 tables)
+                              |
+                              +--> SNS (sends the OTP text message)
+```
+
+| Part | Technology |
+|------|-----------|
+| Website | React (Vite), served by **CloudFront** from a private S3 bucket over HTTPS |
+| API | API Gateway (HTTP API) + 3 Python 3.12 Lambda functions |
+| Database | DynamoDB: `users`, `classes`, `attendance`, `otp` |
+| Login | Passwords hashed with scrypt, signed JWT tokens, role checked on every request |
+| OTP | Amazon SNS text message, code stored only as a hash, expires in 5 minutes |
+| Infrastructure | Terraform (everything is created by code) |
+| Alerts | CloudWatch alarms emailed through SNS |
+
+## Project structure
+
+```
+attendance-system/
+├── README.md
+├── infra/                  Terraform: builds all AWS resources
+│   ├── versions.tf         tools and region
+│   ├── variables.tf        settings you can change
+│   ├── dynamodb.tf         database tables
+│   ├── lambda.tf           Lambda functions and their permissions
+│   ├── api.tf              API URLs and CORS
+│   ├── frontend.tf         S3 bucket + CloudFront
+│   ├── alarms.tf           error alerts
+│   ├── sns.tf              SMS spend limit
+│   └── outputs.tf          URLs printed after deploy
+├── backend/                Python code
+│   ├── common/             shared helpers (responses, db, auth, sms)
+│   ├── functions/          health/, auth/, attendance/
+│   └── tests/              automated tests
+├── frontend/               React app (src/pages, src/api, src/context)
+└── scripts/
+    ├── deploy.sh           deploy everything
+    ├── deploy-frontend.sh  publish only the website
+    └── build.sh            package the Lambda code
+```
 
 ## Prerequisites
-AWS CLI configured, Terraform >= 1.6, Python 3.12, Node 18+.
 
-## Backend
-    ./scripts/build.sh          # packages Lambda code + dependencies
-    cd infra
-    terraform init
-    terraform apply
-Copy the `api_url` output. Re-run `./scripts/build.sh` before `terraform apply` whenever backend code changes.
+### 1. An AWS account
+Create one at aws.amazon.com. Turn on MFA for the root user, then create a normal **IAM user** (do not use root keys) with programmatic access. For a personal learning account, the `AdministratorAccess` policy is the simplest. In the Billing console, create a **budget alert** (for example 5 USD) so you are warned about any cost.
 
-## Frontend
-    cd frontend
-    cp .env.example .env     # paste api_url as VITE_API_URL
-    npm install
-    npm run dev
+### 2. Tools on your computer
 
-Check the API: `curl <api_url>/health`
+| Tool | Version | Check with | Download |
+|------|---------|-----------|----------|
+| Git Bash (Windows only) or any Mac/Linux terminal | any | `bash --version` | git-scm.com |
+| AWS CLI | v2 | `aws --version` | aws.amazon.com/cli |
+| Terraform | 1.6 or newer | `terraform -version` | developer.hashicorp.com/terraform/install |
+| Node.js (includes npm) | 18 or newer | `node -v` | nodejs.org (LTS) |
+| Python | 3.9 or newer | `python3 --version` (or `python --version`) | python.org |
+
+Windows users: run every command below in **Git Bash** (or WSL), not in Command Prompt.
+
+### 3. Connect the AWS CLI to your account
+```
+aws configure
+```
+Enter your IAM user's access key, secret key, region (the default used here is `ap-south-1`; if you choose another, also set it with `-var region=...` below), and output format `json`. Test with:
+```
+aws sts get-caller-identity
+```
+
+## Run from scratch
+
+### Step 1: Get the code
+Unzip the project and open a terminal in the `attendance-system` folder.
+
+### Step 2: Deploy everything with one command
+```
+bash scripts/deploy.sh
+```
+This runs, in order: package the Python code, `terraform init`, `terraform apply`, then build and upload the website. Terraform shows a plan and asks you to type `yes`.
+
+- The **first deploy takes about 10 to 15 minutes**, because CloudFront is slow to create. Later deploys are fast.
+- At the end it prints your **app URL** (`https://xxxx.cloudfront.net`) and the **teacher sign-up code**. Save both.
+
+If your account uses a different region: `bash scripts/deploy.sh -var region=us-east-1`.
+
+### Step 3: Open the app and create accounts
+1. Open the app URL.
+2. Register a **teacher**: choose "Teacher" and enter the sign-up code. To see the code again later: `terraform -chdir=infra output -raw teacher_signup_code`.
+3. Register one or two **students** (use a different browser or a private window).
+4. Mobile numbers must include the country code, for example `+919876543210`.
+
+### Step 4: Try it
+1. Teacher: create a class, add students by username, pick a date, mark everyone, save.
+2. Student: sign in and check that you see only your own records.
+
+### Step 5: Turn on the SMS reset code
+New AWS accounts start in the SNS **SMS sandbox**: texts go only to phone numbers you have verified.
+1. AWS Console, then **SNS**, then **Text messaging (SMS)**, then **Sandbox destination phone numbers**, then **Add phone number**. Enter the code AWS texts you.
+2. Register in the app with that same number, then use "Forgot password?".
+
+Delivering SMS to Indian numbers also requires registered sender details (DLT). If texts do not arrive, test with **log mode** instead:
+```
+bash scripts/deploy.sh -var otp_delivery=log
+```
+The code is then written to CloudWatch Logs (log group `/aws/lambda/attendance-dev-auth`) instead of being texted. Log mode is for testing only and is refused when the stage is `prod`. Switch back with `-var otp_delivery=sms`.
+
+## Step-by-step alternative
+The same thing as `deploy.sh`, one stage at a time:
+```
+bash scripts/build.sh                      # package the Lambda code
+cd infra && terraform init && terraform apply && cd ..
+bash scripts/deploy-frontend.sh            # build and publish the website
+```
+
+## Run the website on your own computer (development)
+Useful while changing the frontend. It talks to the deployed API.
+```
+cd frontend
+echo "VITE_API_URL=$(terraform -chdir=../infra output -raw api_url)" > .env
+npm install
+npm run dev
+```
+Open `http://localhost:5173`. This works because `dev_origins` in `infra/variables.tf` allows it. For a production setup, deploy with `-var 'dev_origins=[]'`.
+
+## Run the automated tests
+```
+cd backend
+pip install -r requirements-dev.txt
+python -m pytest
+```
+The tests use a fake DynamoDB, so they need no AWS account.
+
+## Making changes later
+
+| You changed | Run |
+|-------------|-----|
+| Python code in `backend/` | `bash scripts/build.sh` then `terraform -chdir=infra apply` |
+| React code in `frontend/` | `bash scripts/deploy-frontend.sh` |
+| Anything in `infra/` | `terraform -chdir=infra apply` |
+
+For error emails, deploy with `-var alert_email=you@example.com` and click the confirmation link AWS emails you.
+
+## API reference
+
+| Method and path | Who | Purpose |
+|-----------------|-----|---------|
+| `GET /health` | anyone | Check the API is up |
+| `POST /auth/register` | anyone | Create an account |
+| `POST /auth/login` | anyone | Sign in with email or username |
+| `POST /auth/forgot` | anyone | Text a reset code to a registered number |
+| `POST /auth/reset` | anyone | Set a new password using the code |
+| `POST /classes`, `GET /classes` | teacher | Create / list own classes |
+| `POST /classes/{id}/students`, `GET /classes/{id}/students` | teacher | Add by username / list class students |
+| `POST /attendance` | teacher | Save attendance for a class and date |
+| `GET /attendance?classId=&date=` | teacher | View a class on a day |
+| `GET /attendance/me` | student | View own attendance |
+
+## Security notes
+- Passwords are hashed (scrypt); the OTP is stored only as a keyed hash, works once, expires in 5 minutes, and locks after 5 wrong tries.
+- Login locks for 15 minutes after 5 wrong passwords. The same message is shown for unknown users and wrong passwords.
+- The S3 bucket is private; only CloudFront can read it. CloudFront adds standard security headers.
+- Each Lambda has only the database permissions it needs.
+- The API is rate limited (10 requests per second, burst 20).
+- Known limits: the login token lives in the browser's local storage and stays valid for 8 hours even after a password reset. For a bigger deployment, consider httpOnly cookies, shorter tokens with refresh, and AWS WAF.
+- Never commit `terraform.tfstate`; it contains secrets. It is already in `.gitignore`. For a team, move the state to an S3 backend.
+
+## Cost
+The design uses services with free tiers: DynamoDB provisioned capacity stays under the always-free 25 units, Lambda and API Gateway have free allowances, and CloudFront has a free monthly allowance. Free tier terms depend on your account type and date, so check the Billing console and keep the budget alert on. SMS texts are not free; the spend limit in `infra/sns.tf` caps them at 1 USD per month.
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `Unable to locate credentials` | Run `aws configure` |
+| `Your account must be verified before you can add new CloudFront resources` | New accounts sometimes need verification. Open an AWS Support case, or wait and retry |
+| App opens but shows a network or CORS error | Re-run `bash scripts/deploy.sh`; make sure you opened the CloudFront URL (or `localhost:5173`) |
+| Old version shows after a frontend change | Run `bash scripts/deploy-frontend.sh` and hard refresh (Ctrl+Shift+R) |
+| No SMS arrives | Verify the number in the SNS sandbox, or use log mode (Step 5) |
+| "That email/username/phone is already registered" | Each must be unique across users |
+| `Permission denied` running a script | Run it as `bash scripts/<name>.sh` |
+| Teacher code lost | `terraform -chdir=infra output -raw teacher_signup_code` |
+
+## Delete everything
+```
+terraform -chdir=infra destroy
+```
+Type `yes`. This removes all AWS resources and data created by this project.

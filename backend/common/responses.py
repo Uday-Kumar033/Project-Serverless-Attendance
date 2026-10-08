@@ -1,12 +1,9 @@
 import json
-import os
 
 
 def _headers():
-    return {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": os.environ.get("ALLOWED_ORIGIN", "*"),
-    }
+    # CORS headers are added by API Gateway (see infra/api.tf), not here.
+    return {"Content-Type": "application/json"}
 
 
 def respond(status, body):

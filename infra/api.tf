@@ -9,6 +9,11 @@ locals {
     "GET /attendance/me"  = "attendance"
     "POST /attendance"    = "attendance"
     "GET /attendance"     = "attendance"
+
+    "POST /classes"                    = "attendance"
+    "GET /classes"                     = "attendance"
+    "POST /classes/{classId}/students" = "attendance"
+    "GET /classes/{classId}/students"  = "attendance"
   }
 }
 
@@ -17,7 +22,7 @@ resource "aws_apigatewayv2_api" "http" {
   protocol_type = "HTTP"
 
   cors_configuration {
-    allow_origins = [var.allowed_origin]
+    allow_origins = concat(["https://${aws_cloudfront_distribution.web.domain_name}"], var.dev_origins)
     allow_methods = ["GET", "POST", "PUT", "OPTIONS"]
     allow_headers = ["Content-Type", "Authorization"]
   }
