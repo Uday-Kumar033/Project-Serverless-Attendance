@@ -91,7 +91,10 @@ aws sts get-caller-identity
 ## Run from scratch
 
 ### Step 1: Get the code
-Unzip the project and open a terminal in the `attendance-system` folder.
+```
+git clone https://github.com/Uday-Kumar033/Project-Serverless-Attendance.git
+cd Project-Serverless-Attendance
+```
 
 ### Step 2: Deploy everything with one command
 ```
