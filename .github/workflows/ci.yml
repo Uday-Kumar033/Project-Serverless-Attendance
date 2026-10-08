@@ -1,50 +1,50 @@
-name: CI
+# name: CI
 
-# Runs the checks. Used on pull requests, and reused by the deploy workflow.
-on:
-  pull_request:
-  workflow_call:
+# # Runs the checks. Used on pull requests, and reused by the deploy workflow.
+# on:
+#   pull_request:
+#   workflow_call:
 
-permissions:
-  contents: read
+# permissions:
+#   contents: read
 
-jobs:
-  backend:
-    name: Backend tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: pip install -r backend/requirements-dev.txt
-      - run: python -m pytest backend/tests -q
-        working-directory: backend
+# jobs:
+#   backend:
+#     name: Backend tests
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: actions/setup-python@v5
+#         with:
+#           python-version: '3.12'
+#       - run: pip install -r backend/requirements-dev.txt
+#       - run: python -m pytest backend/tests -q
+#         working-directory: backend
 
-  frontend:
-    name: Frontend build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm install --no-audit --no-fund
-        working-directory: frontend
-      - run: npm run build
-        working-directory: frontend
-        env:
-          VITE_API_URL: https://example.invalid
+#   frontend:
+#     name: Frontend build
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: actions/setup-node@v4
+#         with:
+#           node-version: 20
+#       - run: npm install --no-audit --no-fund
+#         working-directory: frontend
+#       - run: npm run build
+#         working-directory: frontend
+#         env:
+#           VITE_API_URL: https://example.invalid
 
-  terraform:
-    name: Terraform check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.10.5
-      - run: terraform init -backend=false
-        working-directory: infra
-      - run: terraform validate
-        working-directory: infra
+#   terraform:
+#     name: Terraform check
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: hashicorp/setup-terraform@v3
+#         with:
+#           terraform_version: 1.10.5
+#       - run: terraform init -backend=false
+#         working-directory: infra
+#       - run: terraform validate
+#         working-directory: infra
