@@ -41,3 +41,18 @@ resource "aws_cloudwatch_metric_alarm" "api_5xx" {
   treat_missing_data  = "notBreaching"
   alarm_actions       = [aws_sns_topic.alerts.arn]
 }
+
+resource "aws_cloudwatch_metric_alarm" "web_server" {
+  alarm_name          = "attendance-${var.stage}-web-server-health"
+  alarm_description   = "The web server failed its AWS health check"
+  namespace           = "AWS/EC2"
+  metric_name         = "StatusCheckFailed"
+  dimensions          = { InstanceId = aws_instance.web.id }
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+}

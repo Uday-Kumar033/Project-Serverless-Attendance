@@ -1,5 +1,13 @@
 terraform {
-  required_version = ">= 1.6"
+  # State lives in S3 so your computer and the CI pipeline share it. The bucket name and region
+  # are supplied by scripts/tf-init.sh.
+  backend "s3" {
+    key          = "attendance/terraform.tfstate"
+    encrypt      = true
+    use_lockfile = true
+  }
+
+  required_version = ">= 1.10"
   required_providers {
     aws     = { source = "hashicorp/aws", version = "~> 5.60" }
     archive = { source = "hashicorp/archive", version = "~> 2.4" }

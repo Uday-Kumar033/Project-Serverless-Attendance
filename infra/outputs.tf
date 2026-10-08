@@ -8,17 +8,21 @@ output "teacher_signup_code" {
 }
 
 output "frontend_url" {
-  value = "https://${aws_cloudfront_distribution.web.domain_name}"
+  value = "http://${aws_eip.web.public_ip}"
 }
 
 output "frontend_bucket" {
   value = aws_s3_bucket.web.bucket
 }
 
-output "cloudfront_distribution_id" {
-  value = aws_cloudfront_distribution.web.id
+output "web_instance_id" {
+  value = aws_instance.web.id
 }
 
 output "region" {
   value = var.region
+}
+
+output "github_deploy_role_arn" {
+  value = one(aws_iam_role.github_deploy[*].arn)
 }

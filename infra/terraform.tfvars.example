@@ -1,0 +1,8 @@
+# Copy this file to terraform.tfvars and edit. Terraform loads it automatically, locally and in CI.
+# It holds no secrets, so it is safe to commit.
+
+github_repo = "your-github-username/attendance-system"
+
+# alert_email   = "you@example.com"
+# otp_delivery  = "sms"        # or "log" for testing without SMS
+# dev_origins   = []           # use [] in production

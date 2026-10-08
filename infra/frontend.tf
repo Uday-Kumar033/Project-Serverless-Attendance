@@ -1,9 +1,12 @@
-# Hosting for the React app: a private S3 bucket served to the world through CloudFront (HTTPS).
+# Hosting for the React app: one small EC2 server running nginx.
+# Files reach the server through a private S3 bucket and AWS Systems Manager (SSM),
+# so no SSH port is open and no key pair is needed.
 
 resource "random_id" "bucket" {
   byte_length = 4
 }
 
+# ---------- Upload bucket (private) ----------
 resource "aws_s3_bucket" "web" {
   bucket        = "attendance-${var.stage}-web-${random_id.bucket.hex}"
   force_destroy = true # lets `terraform destroy` delete the bucket even if it has files
@@ -17,91 +20,118 @@ resource "aws_s3_bucket_public_access_block" "web" {
   restrict_public_buckets = true
 }
 
-resource "aws_cloudfront_origin_access_control" "web" {
-  name                              = "attendance-${var.stage}-web"
-  origin_access_control_origin_type = "s3"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
+# ---------- Network ----------
+data "aws_vpc" "default" {
+  default = true
 }
 
-data "aws_cloudfront_cache_policy" "optimized" {
-  name = "Managed-CachingOptimized"
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+  filter {
+    name   = "default-for-az"
+    values = ["true"]
+  }
 }
 
-data "aws_cloudfront_response_headers_policy" "security" {
-  name = "Managed-SecurityHeadersPolicy"
+resource "aws_security_group" "web" {
+  name        = "attendance-${var.stage}-web"
+  description = "Public web traffic only (no SSH)"
+  vpc_id      = data.aws_vpc.default.id
+
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
-resource "aws_cloudfront_distribution" "web" {
-  enabled             = true
-  is_ipv6_enabled     = true
-  comment             = "attendance-${var.stage} frontend"
-  default_root_object = "index.html"
-  price_class         = "PriceClass_100"
-
-  origin {
-    domain_name              = aws_s3_bucket.web.bucket_regional_domain_name
-    origin_id                = "s3-web"
-    origin_access_control_id = aws_cloudfront_origin_access_control.web.id
-  }
-
-  default_cache_behavior {
-    target_origin_id           = "s3-web"
-    viewer_protocol_policy     = "redirect-to-https"
-    allowed_methods            = ["GET", "HEAD"]
-    cached_methods             = ["GET", "HEAD"]
-    compress                   = true
-    cache_policy_id            = data.aws_cloudfront_cache_policy.optimized.id
-    response_headers_policy_id = data.aws_cloudfront_response_headers_policy.security.id
-  }
-
-  # React Router handles URLs like /login in the browser, so unknown paths must return index.html.
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
-
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
-
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
+# ---------- Permissions for the server ----------
+data "aws_iam_policy_document" "ec2_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
     }
   }
-
-  viewer_certificate {
-    cloudfront_default_certificate = true
-  }
 }
 
-# Only this CloudFront distribution may read the bucket.
-data "aws_iam_policy_document" "web" {
+resource "aws_iam_role" "web" {
+  name               = "attendance-${var.stage}-web"
+  assume_role_policy = data.aws_iam_policy_document.ec2_assume.json
+}
+
+# Lets us run commands on the server without SSH.
+resource "aws_iam_role_policy_attachment" "web_ssm" {
+  role       = aws_iam_role.web.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# Lets the server download the website files from the bucket.
+data "aws_iam_policy_document" "web_s3" {
   statement {
     actions   = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.web.arn}/*"]
-
-    principals {
-      type        = "Service"
-      identifiers = ["cloudfront.amazonaws.com"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.web.arn]
-    }
+  }
+  statement {
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.web.arn]
   }
 }
 
-resource "aws_s3_bucket_policy" "web" {
-  bucket     = aws_s3_bucket.web.id
-  policy     = data.aws_iam_policy_document.web.json
-  depends_on = [aws_s3_bucket_public_access_block.web]
+resource "aws_iam_role_policy" "web_s3" {
+  name   = "read-website-files"
+  role   = aws_iam_role.web.id
+  policy = data.aws_iam_policy_document.web_s3.json
+}
+
+resource "aws_iam_instance_profile" "web" {
+  name = "attendance-${var.stage}-web"
+  role = aws_iam_role.web.name
+}
+
+# ---------- Server ----------
+data "aws_ssm_parameter" "al2023_ami" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+}
+
+resource "aws_instance" "web" {
+  ami                         = data.aws_ssm_parameter.al2023_ami.value
+  instance_type               = var.instance_type
+  subnet_id                   = data.aws_subnets.default.ids[0]
+  vpc_security_group_ids      = [aws_security_group.web.id]
+  iam_instance_profile        = aws_iam_instance_profile.web.name
+  user_data                   = templatefile("${path.module}/user_data.sh.tftpl", { region = var.region })
+  user_data_replace_on_change = true
+
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required" # IMDSv2 only
+  }
+
+  root_block_device {
+    volume_size = 8
+    volume_type = "gp3"
+    encrypted   = true
+  }
+
+  tags = { Name = "attendance-${var.stage}-web" }
+}
+
+# A fixed public address that survives stop/start.
+resource "aws_eip" "web" {
+  domain   = "vpc"
+  instance = aws_instance.web.id
 }

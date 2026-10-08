@@ -22,7 +22,7 @@ resource "aws_apigatewayv2_api" "http" {
   protocol_type = "HTTP"
 
   cors_configuration {
-    allow_origins = concat(["https://${aws_cloudfront_distribution.web.domain_name}"], var.dev_origins)
+    allow_origins = concat(["http://${aws_eip.web.public_ip}"], var.dev_origins)
     allow_methods = ["GET", "POST", "PUT", "OPTIONS"]
     allow_headers = ["Content-Type", "Authorization"]
   }

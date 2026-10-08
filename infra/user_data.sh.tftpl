@@ -1,0 +1,58 @@
+#!/bin/bash
+# Runs once when the server first starts: installs and configures nginx.
+set -euxo pipefail
+
+dnf install -y nginx
+
+mkdir -p /var/www/app
+echo '<!doctype html><title>Attendance</title><p>Server is ready. Publish the app with: bash scripts/deploy-frontend.sh</p>' > /var/www/app/index.html
+chown -R nginx:nginx /var/www/app
+
+cat > /etc/nginx/nginx.conf <<'NGINX'
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /run/nginx.pid;
+
+events { worker_connections 1024; }
+
+http {
+  include /etc/nginx/mime.types;
+  default_type application/octet-stream;
+  sendfile on;
+  server_tokens off;
+  gzip on;
+  gzip_types text/css application/javascript application/json image/svg+xml;
+
+  server {
+    listen 80 default_server;
+    server_name _;
+    root /var/www/app;
+    index index.html;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.execute-api.${region}.amazonaws.com; frame-ancestors 'none'" always;
+
+    # Built files have unique names, so browsers may keep them for a year.
+    location /assets/ {
+      expires 1y;
+      try_files $uri =404;
+    }
+
+    # index.html must always be re-checked so new deploys show up.
+    location = /index.html {
+      expires -1;
+    }
+
+    # React Router handles paths like /login in the browser.
+    location / {
+      try_files $uri /index.html;
+    }
+  }
+}
+NGINX
+
+nginx -t
+systemctl enable --now nginx

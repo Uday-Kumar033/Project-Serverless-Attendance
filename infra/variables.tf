@@ -30,3 +30,27 @@ variable "otp_delivery" {
     error_message = "otp_delivery must be \"sms\" or \"log\"."
   }
 }
+
+variable "github_repo" {
+  type        = string
+  default     = ""
+  description = "GitHub repository allowed to deploy, like owner/repo. Leave empty to skip CI/CD setup."
+}
+
+variable "github_branch" {
+  type        = string
+  default     = "main"
+  description = "Only pushes to this branch may deploy."
+}
+
+variable "create_github_oidc_provider" {
+  type        = bool
+  default     = true
+  description = "Set to false if your AWS account already has a GitHub OIDC provider."
+}
+
+variable "instance_type" {
+  type        = string
+  default     = "t3.micro"
+  description = "Size of the web server. Pick the one your AWS console marks as Free tier eligible (t3.micro or t2.micro, depending on region)."
+}
