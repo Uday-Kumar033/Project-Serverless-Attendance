@@ -4,3 +4,6 @@ dist/
 samconfig.toml
 .env
 __pycache__/
+build/
+infra/.terraform/
+infra/*.tfstate*
