@@ -1,1 +1,6 @@
-backend/.venv/
+node_modules/
+dist/
+.aws-sam/
+samconfig.toml
+.env
+__pycache__/
